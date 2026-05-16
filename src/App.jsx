@@ -282,6 +282,6 @@ export default function App() {
       {formOpen && (
         <FormModal initial={editing} onSave={save} onClose={()=>{ setFormOpen(false); setEditing(null); }} loading={saving}/>
       )}
-    </div>
+    </div>  
   );
 }
