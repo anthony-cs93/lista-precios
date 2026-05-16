@@ -1,30 +1,24 @@
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "./supabaseClient";
 
 const CATEGORIES = ["Todas","Material","Accesorio","Herramienta","Insumo","Otro"];
 const UMS = ["UND","MT","CJA","PAR","KG","RLL","PL","M2","GL","CTO","MLL","KIT"];
 
-const SAMPLE = [
-  { id: 1, nombre: "Tela Canvas", caracteristicas: "100% algodón, 300g/m², resistente al agua", categoria: "Material", precio: 45.00, um: "MT", marca: "TextilPro", proveedor: "Distribuidora Lima SAC", imagen: "", notas: "Disponible en colores neutros" },
-  { id: 2, nombre: "Hilo Encerado", caracteristicas: "Grosor 1mm, alta resistencia, no se deshilacha", categoria: "Insumo", precio: 12.50, um: "RLL", marca: "HiloMax", proveedor: "Insumos Craft Perú", imagen: "", notas: "" },
-  { id: 3, nombre: "Tijera Industrial", caracteristicas: "Acero inoxidable, 25cm, mango ergonómico", categoria: "Herramienta", precio: 85.00, um: "UND", marca: "Fiskars", proveedor: "Ferrería Central", imagen: "", notas: "Requiere mantenimiento semestral" },
-];
-
 const COLORS = { Material:"#1B4F72", Accesorio:"#6C3483", Herramienta:"#784212", Insumo:"#1D6A39", Otro:"#555" };
 const BG = { Material:"#D6EAF8", Accesorio:"#E8DAEF", Herramienta:"#FAE5D3", Insumo:"#D5F5E3", Otro:"#EAEAEA" };
-const genId = () => Date.now();
+
 const emptyForm = { nombre:"", caracteristicas:"", categoria:"Material", precio:"", um:"", marca:"", proveedor:"", imagen:"", notas:"" };
 
 const overlayStyle = { position:"fixed", inset:0, background:"rgba(5,12,28,0.88)", backdropFilter:"blur(3px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100 };
-
 const inputStyle = { width:"100%", boxSizing:"border-box", marginBottom:10, borderRadius:10, border:"0.5px solid rgba(255,255,255,0.25)", background:"rgba(255,255,255,0.1)", color:"#fff", padding:"7px 11px", fontSize:14, outline:"none" };
 const labelStyle = { fontSize:12, color:"rgba(255,255,255,0.6)", display:"block", marginBottom:3 };
 const cardStyle = { background:"rgba(15,30,60,0.97)", borderRadius:16, padding:"1.5rem", border:"0.5px solid rgba(255,255,255,0.12)", color:"#fff" };
 
 function Badge({ cat }) {
-  return <span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background: BG[cat]||"#eee", color: COLORS[cat]||"#333" }}>{cat}</span>;
+  return <span style={{ fontSize:11, fontWeight:500, padding:"2px 8px", borderRadius:20, background:BG[cat]||"#eee", color:COLORS[cat]||"#333" }}>{cat}</span>;
 }
 
-function FormModal({ initial, onSave, onClose }) {
+function FormModal({ initial, onSave, onClose, loading }) {
   const [form, setForm] = useState(initial || emptyForm);
   const fileRef = useRef();
   const set = (k, v) => setForm(f=>({...f, [k]:v}));
@@ -47,8 +41,7 @@ function FormModal({ initial, onSave, onClose }) {
   const sel = (label, key, opts, placeholder) => (
     <div>
       <label style={labelStyle}>{label}</label>
-      <select value={form[key]} onChange={e=>set(key,e.target.value)}
-        style={{...inputStyle, appearance:"none"}}>
+      <select value={form[key]} onChange={e=>set(key,e.target.value)} style={{...inputStyle, appearance:"none"}}>
         {placeholder && <option value="">{placeholder}</option>}
         {opts.map(o=><option key={o} style={{background:"#0f1e3c",color:"#fff"}}>{o}</option>)}
       </select>
@@ -62,13 +55,11 @@ function FormModal({ initial, onSave, onClose }) {
           <h2 style={{ margin:0, fontSize:16, fontWeight:500, color:"#fff" }}>{initial ? "Editar artículo" : "Nuevo artículo"}</h2>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:"rgba(255,255,255,0.6)", lineHeight:1 }}>×</button>
         </div>
-
         {fld("Nombre *","nombre","Ej: Tela Canvas")}
         <div>
           <label style={labelStyle}>Características</label>
           <textarea value={form.caracteristicas} onChange={e=>set("caracteristicas",e.target.value)}
-            placeholder="Descripción detallada" rows={2}
-            style={{...inputStyle, resize:"vertical"}}/>
+            placeholder="Descripción detallada" rows={2} style={{...inputStyle, resize:"vertical"}}/>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
           {sel("Categoría","categoria", CATEGORIES.slice(1))}
@@ -79,7 +70,6 @@ function FormModal({ initial, onSave, onClose }) {
           {fld("Marca","marca","Ej: Fiskars")}
         </div>
         {fld("Proveedor","proveedor","Nombre del proveedor")}
-
         <div>
           <label style={labelStyle}>Imagen referencial</label>
           <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:10 }}>
@@ -95,19 +85,16 @@ function FormModal({ initial, onSave, onClose }) {
             {form.imagen && <button onClick={()=>set("imagen","")} style={{ fontSize:12, background:"none", border:"0.5px solid rgba(255,255,255,0.2)", color:"rgba(255,255,255,0.6)", borderRadius:8, padding:"4px 10px", cursor:"pointer" }}>Quitar</button>}
           </div>
         </div>
-
         <div>
           <label style={labelStyle}>Notas opcionales</label>
           <textarea value={form.notas} onChange={e=>set("notas",e.target.value)}
-            placeholder="Observaciones, estado, etc." rows={2}
-            style={{...inputStyle, resize:"vertical"}}/>
+            placeholder="Observaciones, estado, etc." rows={2} style={{...inputStyle, resize:"vertical"}}/>
         </div>
-
         <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:8 }}>
           <button onClick={onClose} style={{ fontSize:13, background:"rgba(255,255,255,0.1)", border:"0.5px solid rgba(255,255,255,0.2)", color:"#fff", borderRadius:8, padding:"6px 14px", cursor:"pointer" }}>Cancelar</button>
-          <button disabled={!valid} onClick={()=>{ if(valid) onSave({...form, id: initial?.id || genId(), precio: parseFloat(form.precio)||0 }); }}
+          <button disabled={!valid || loading} onClick={()=>{ if(valid) onSave({...form, precio: parseFloat(form.precio)||0}); }}
             style={{ background: valid?"#2563b0":"rgba(255,255,255,0.15)", color:"#fff", border:"none", borderRadius:8, padding:"6px 18px", cursor: valid?"pointer":"not-allowed", fontWeight:500, fontSize:14 }}>
-            {initial ? "Guardar cambios" : "Agregar"}
+            {loading ? "Guardando..." : initial ? "Guardar cambios" : "Agregar"}
           </button>
         </div>
       </div>
@@ -116,20 +103,14 @@ function FormModal({ initial, onSave, onClose }) {
 }
 
 function DetailModal({ item, onClose, onEdit, onDel }) {
-  const fields = [
-    ["Características", item.caracteristicas],
-    ["U.M.", item.um],
-    ["Marca", item.marca],
-    ["Proveedor", item.proveedor],
-    ["Notas", item.notas],
-  ];
+  const fields = [["Características",item.caracteristicas],["U.M.",item.um],["Marca",item.marca],["Proveedor",item.proveedor],["Notas",item.notas]];
   return (
     <div onClick={onClose} style={overlayStyle}>
       <div onClick={e=>e.stopPropagation()} style={{...cardStyle, width:390, maxHeight:"88vh", overflowY:"auto"}}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
           <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-            <div style={{ width:52, height:52, borderRadius:10, background: BG[item.categoria]||"#eee", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", flexShrink:0 }}>
-              {item.imagen ? <img src={item.imagen} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <span style={{ fontSize:24, color: COLORS[item.categoria], fontWeight:500 }}>{item.nombre[0]}</span>}
+            <div style={{ width:52, height:52, borderRadius:10, background:BG[item.categoria]||"#eee", display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", flexShrink:0 }}>
+              {item.imagen ? <img src={item.imagen} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <span style={{ fontSize:24, color:COLORS[item.categoria], fontWeight:500 }}>{item.nombre[0]}</span>}
             </div>
             <div>
               <p style={{ margin:"0 0 4px", fontWeight:500, fontSize:17, color:"#fff" }}>{item.nombre}</p>
@@ -159,28 +140,56 @@ function DetailModal({ item, onClose, onEdit, onDel }) {
 }
 
 export default function App() {
-  const [items, setItems] = useState(SAMPLE);
+  const [items, setItems] = useState([]);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("Todas");
   const [view, setView] = useState("grid");
   const [detail, setDetail] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [loadingData, setLoadingData] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => { fetchItems(); }, []);
+
+  const fetchItems = async () => {
+    setLoadingData(true);
+    const { data, error } = await supabase.from("articulos").select("*").order("created_at", { ascending: false });
+    if (error) setError("Error al cargar los artículos.");
+    else setItems(data || []);
+    setLoadingData(false);
+  };
 
   const filtered = items.filter(i => {
     const q = search.toLowerCase();
-    const match = !q || i.nombre.toLowerCase().includes(q) || i.marca.toLowerCase().includes(q) || i.proveedor.toLowerCase().includes(q);
+    const match = !q || i.nombre.toLowerCase().includes(q) || (i.marca||"").toLowerCase().includes(q) || (i.proveedor||"").toLowerCase().includes(q);
     const cat = catFilter === "Todas" || i.categoria === catFilter;
     return match && cat;
   });
 
-  const save = (item) => {
-    if (editing) { setItems(prev => prev.map(i => i.id === item.id ? item : i)); setDetail(item); }
-    else setItems(prev => [...prev, item]);
-    setEditing(null); setFormOpen(false);
+  const save = async (form) => {
+    setSaving(true);
+    if (editing) {
+      const { error } = await supabase.from("articulos").update(form).eq("id", editing.id);
+      if (!error) { await fetchItems(); setDetail({...form, id: editing.id}); }
+      else setError("Error al actualizar.");
+    } else {
+      const { error } = await supabase.from("articulos").insert([form]);
+      if (!error) await fetchItems();
+      else setError("Error al agregar.");
+    }
+    setSaving(false);
+    setEditing(null);
+    setFormOpen(false);
   };
 
-  const del = (id) => { if (confirm("¿Eliminar este artículo?")) { setItems(prev => prev.filter(i => i.id !== id)); setDetail(null); } };
+  const del = async (id) => {
+    if (!confirm("¿Eliminar este artículo?")) return;
+    const { error } = await supabase.from("articulos").delete().eq("id", id);
+    if (!error) { setItems(prev => prev.filter(i => i.id !== id)); setDetail(null); }
+    else setError("Error al eliminar.");
+  };
 
   return (
     <div style={{ padding:"1rem 0", fontFamily:"var(--font-sans)" }}>
@@ -194,6 +203,12 @@ export default function App() {
         <button onClick={()=>{ setEditing(null); setFormOpen(true); }} style={{ background:"#1B3A6B", color:"#fff", border:"none", borderRadius:8, padding:"7px 16px", cursor:"pointer", fontWeight:500, fontSize:14 }}>+ Nuevo artículo</button>
       </div>
 
+      {error && (
+        <div style={{ background:"#fee2e2", color:"#991b1b", padding:"10px 14px", borderRadius:8, marginBottom:12, fontSize:14, display:"flex", justifyContent:"space-between" }}>
+          {error} <span style={{ cursor:"pointer", fontWeight:500 }} onClick={()=>setError(null)}>×</span>
+        </div>
+      )}
+
       <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:"1rem", alignItems:"center" }}>
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por nombre, marca o proveedor..." style={{ flex:1, minWidth:180, borderRadius:10 }}/>
         <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{ minWidth:130, borderRadius:10 }}>
@@ -201,21 +216,23 @@ export default function App() {
         </select>
         <div style={{ display:"flex", border:"0.5px solid var(--color-border-tertiary)", borderRadius:10, overflow:"hidden" }}>
           {["grid","list"].map(v=>(
-            <button key={v} onClick={()=>setView(v)} style={{ padding:"5px 12px", background: view===v?"#1B3A6B":"var(--color-background-primary)", color: view===v?"#fff":"var(--color-text-secondary)", border:"none", cursor:"pointer", fontSize:13 }}>
+            <button key={v} onClick={()=>setView(v)} style={{ padding:"5px 12px", background:view===v?"#1B3A6B":"var(--color-background-primary)", color:view===v?"#fff":"var(--color-text-secondary)", border:"none", cursor:"pointer", fontSize:13 }}>
               {v==="grid" ? "⊞ Grid" : "≡ Lista"}
             </button>
           ))}
         </div>
       </div>
 
-      {view === "grid" && (
+      {loadingData ? (
+        <div style={{ textAlign:"center", padding:"3rem 0", color:"var(--color-text-secondary)", fontSize:14 }}>Cargando artículos...</div>
+      ) : view === "grid" ? (
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(180px, 1fr))", gap:12 }}>
           {filtered.map(item => (
             <div key={item.id} onClick={()=>setDetail(item)} style={{ background:"var(--color-background-primary)", border:"0.5px solid var(--color-border-tertiary)", borderRadius:12, overflow:"hidden", cursor:"pointer" }}
               onMouseEnter={e=>e.currentTarget.style.borderColor="var(--color-border-secondary)"}
               onMouseLeave={e=>e.currentTarget.style.borderColor="var(--color-border-tertiary)"}>
-              <div style={{ height:90, background: BG[item.categoria]||"#eee", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                {item.imagen ? <img src={item.imagen} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <span style={{ fontSize:32, color: COLORS[item.categoria]||"#888", fontWeight:500 }}>{item.nombre[0]}</span>}
+              <div style={{ height:90, background:BG[item.categoria]||"#eee", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                {item.imagen ? <img src={item.imagen} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <span style={{ fontSize:32, color:COLORS[item.categoria]||"#888", fontWeight:500 }}>{item.nombre[0]}</span>}
               </div>
               <div style={{ padding:"10px 12px" }}>
                 <p style={{ margin:"0 0 4px", fontWeight:500, fontSize:14, color:"var(--color-text-primary)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{item.nombre}</p>
@@ -225,17 +242,15 @@ export default function App() {
             </div>
           ))}
         </div>
-      )}
-
-      {view === "list" && (
+      ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
           {filtered.map(item => (
             <div key={item.id} style={{ background:"var(--color-background-primary)", border:"0.5px solid var(--color-border-tertiary)", borderRadius:10, padding:"10px 14px", display:"flex", alignItems:"center", gap:12, cursor:"pointer" }}
               onClick={()=>setDetail(item)}
               onMouseEnter={e=>e.currentTarget.style.borderColor="var(--color-border-secondary)"}
               onMouseLeave={e=>e.currentTarget.style.borderColor="var(--color-border-tertiary)"}>
-              <div style={{ width:40, height:40, borderRadius:8, background: BG[item.categoria]||"#eee", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, overflow:"hidden" }}>
-                {item.imagen ? <img src={item.imagen} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <span style={{ fontSize:18, color: COLORS[item.categoria]||"#888", fontWeight:500 }}>{item.nombre[0]}</span>}
+              <div style={{ width:40, height:40, borderRadius:8, background:BG[item.categoria]||"#eee", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, overflow:"hidden" }}>
+                {item.imagen ? <img src={item.imagen} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : <span style={{ fontSize:18, color:COLORS[item.categoria]||"#888", fontWeight:500 }}>{item.nombre[0]}</span>}
               </div>
               <div style={{ flex:1, minWidth:0 }}>
                 <p style={{ margin:0, fontWeight:500, fontSize:14, color:"var(--color-text-primary)" }}>{item.nombre}</p>
@@ -254,27 +269,18 @@ export default function App() {
         </div>
       )}
 
-      {filtered.length === 0 && (
+      {!loadingData && filtered.length === 0 && (
         <div style={{ textAlign:"center", padding:"3rem 0", color:"var(--color-text-secondary)", fontSize:14 }}>
-          No se encontraron artículos con ese criterio.
+          {items.length === 0 ? "Aún no hay artículos. ¡Agrega el primero!" : "No se encontraron artículos con ese criterio."}
         </div>
       )}
 
       {detail && !formOpen && (
-        <DetailModal
-          item={detail}
-          onClose={()=>setDetail(null)}
-          onEdit={()=>{ setEditing(detail); setFormOpen(true); }}
-          onDel={()=>del(detail.id)}
-        />
+        <DetailModal item={detail} onClose={()=>setDetail(null)} onEdit={()=>{ setEditing(detail); setFormOpen(true); }} onDel={()=>del(detail.id)}/>
       )}
 
       {formOpen && (
-        <FormModal
-          initial={editing}
-          onSave={save}
-          onClose={()=>{ setFormOpen(false); setEditing(null); }}
-        />
+        <FormModal initial={editing} onSave={save} onClose={()=>{ setFormOpen(false); setEditing(null); }} loading={saving}/>
       )}
     </div>
   );
