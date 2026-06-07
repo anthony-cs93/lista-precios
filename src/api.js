@@ -20,6 +20,3 @@ export async function updateItem(item) {
   return request("POST", { _action: "update", ...item });
 }
 
-export async function deleteItem(id) {
-  return request("POST", { _action: "delete", id });
-}
