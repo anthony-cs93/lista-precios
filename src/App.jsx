@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "./supabaseClient";
+import { getItems, createItem, updateItem, deleteItem } from "./api";
 
-const CATEGORIES = ["Todas","Material","Accesorio","Herramienta","Insumo","Otro"];
-const UMS = ["UND","MT","CJA","PAR","KG","RLL","PL","M2","GL","CTO","MLL","KIT"];
+const CATEGORIES = ["Todas","CONSUMIBLE","ACCESORIO","ILUMINACION","MELAMINA","MADERA","DECORACION","SERVICIO"];
+const UMS = ["UND","MT","CJA","PAR","KG","RLL","PL","M2","GL","CTO","KIT","LT"];
 
-const COLORS = { Material:"#1B4F72", Accesorio:"#6C3483", Herramienta:"#784212", Insumo:"#1D6A39", Otro:"#555" };
-const BG = { Material:"#D6EAF8", Accesorio:"#E8DAEF", Herramienta:"#FAE5D3", Insumo:"#D5F5E3", Otro:"#EAEAEA" };
+const COLORS = { CONSUMIBLE:"#1B4F72", ACCESORIO:"#6C3483", ILUMINACION:"#F39C12", MELAMINA:"#1D6A39", MADERA:"#784212", DECORACION:"#C0392B", SERVICIO:"#555" };
+const BG = { CONSUMIBLE:"#D6EAF8", ACCESORIO:"#E8DAEF", ILUMINACION:"#FEF9E7", MELAMINA:"#D5F5E3", MADERA:"#FAE5D3", DECORACION:"#F2D7D5", SERVICIO:"#EAEAEA" };
 
-const emptyForm = { nombre:"", caracteristicas:"", categoria:"Material", precio:"", um:"", marca:"", proveedor:"", imagen:"", notas:"" };
+const emptyForm = { nombre:"", caracteristicas:"", categoria:"CONSUMIBLE", precio:"", um:"", marca:"", proveedor:"", imagen:"", notas:"" };
 
 const overlayStyle = { position:"fixed", inset:0, background:"rgba(5,12,28,0.88)", backdropFilter:"blur(3px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100 };
 const inputStyle = { width:"100%", boxSizing:"border-box", marginBottom:10, borderRadius:10, border:"0.5px solid rgba(255,255,255,0.25)", background:"rgba(255,255,255,0.1)", color:"#fff", padding:"7px 11px", fontSize:14, outline:"none" };
@@ -155,9 +155,12 @@ export default function App() {
 
   const fetchItems = async () => {
     setLoadingData(true);
-    const { data, error } = await supabase.from("articulos").select("*").order("created_at", { ascending: false });
-    if (error) setError("Error al cargar los artículos.");
-    else setItems(data || []);
+    try {
+      const data = await getItems();
+      setItems(data || []);
+    } catch {
+      setError("Error al cargar los artículos.");
+    }
     setLoadingData(false);
   };
 
@@ -170,14 +173,17 @@ export default function App() {
 
   const save = async (form) => {
     setSaving(true);
-    if (editing) {
-      const { error } = await supabase.from("articulos").update(form).eq("id", editing.id);
-      if (!error) { await fetchItems(); setDetail({...form, id: editing.id}); }
-      else setError("Error al actualizar.");
-    } else {
-      const { error } = await supabase.from("articulos").insert([form]);
-      if (!error) await fetchItems();
-      else setError("Error al agregar.");
+    try {
+      if (editing) {
+        await updateItem({ ...form, id: editing.id });
+        await fetchItems();
+        setDetail({ ...form, id: editing.id });
+      } else {
+        await createItem(form);
+        await fetchItems();
+      }
+    } catch {
+      setError("Error al guardar.");
     }
     setSaving(false);
     setEditing(null);
@@ -186,9 +192,13 @@ export default function App() {
 
   const del = async (id) => {
     if (!confirm("¿Eliminar este artículo?")) return;
-    const { error } = await supabase.from("articulos").delete().eq("id", id);
-    if (!error) { setItems(prev => prev.filter(i => i.id !== id)); setDetail(null); }
-    else setError("Error al eliminar.");
+    try {
+      await deleteItem(id);
+      setItems(prev => prev.filter(i => i.id !== id));
+      setDetail(null);
+    } catch {
+      setError("Error al eliminar.");
+    }
   };
 
   return (
