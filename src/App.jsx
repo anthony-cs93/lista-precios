@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { getItems, createItem, updateItem } from "./api";
+import { getItems, createItem, updateItem, verifyPassword } from "./api";
 
 const CATEGORIES = ["Todas","CONSUMIBLE","ACCESORIO","ILUMINACION","MELAMINA","MADERA","DECORACION","SERVICIO"];
 const UMS = ["UND","MT","CJA","PAR","KG","RLL","PL","M2","GL","CTO","KIT","LT"];
@@ -67,15 +67,6 @@ function FormModal({ initial, onSave, onClose, loading }) {
         style={inputStyle} min={type==="number"?0:undefined} step={type==="number"?"0.01":undefined}/>
     </div>
   );
-  const sel = (label, key, opts, placeholder) => (
-    <div>
-      <label style={labelStyle}>{label}</label>
-      <select value={form[key]} onChange={e=>set(key,e.target.value)} style={{...inputStyle, appearance:"none"}}>
-        {placeholder && <option value="">{placeholder}</option>}
-        {opts.map(o=><option key={o} style={{background:"var(--bg-card)",color:"var(--text-primary)"}}>{o}</option>)}
-      </select>
-    </div>
-  );
 
   return (
     <div onClick={onClose} style={overlayStyle}>
@@ -116,7 +107,32 @@ function FormModal({ initial, onSave, onClose, loading }) {
   );
 }
 
-function DetailModal({ item, onClose, onEdit }) {
+function PasswordModal({ error, busy, value, onChange, onCancel, onSubmit }) {
+  return (
+    <div onClick={onCancel} style={overlayStyle}>
+      <div onClick={e=>e.stopPropagation()} style={{...cardStyle, width:320}}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12 }}>
+          <h2 style={{ margin:0, fontSize:15, fontWeight:600, color:"var(--text-primary)" }}>Desbloquear edición</h2>
+          <button onClick={onCancel} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", color:"var(--text-muted)", lineHeight:1 }}>×</button>
+        </div>
+        <p style={{ margin:"0 0 10px", fontSize:13, color:"var(--text-muted)" }}>Ingresa la contraseña para poder editar el catálogo.</p>
+        <input type="password" value={value} onChange={e=>onChange(e.target.value)}
+          onKeyDown={e=>{ if(e.key==="Enter" && value && !busy) onSubmit(); }}
+          placeholder="Contraseña" style={inputStyle} autoFocus/>
+        {error && <p style={{ margin:"0 0 8px", fontSize:12, color:"var(--danger)" }}>Contraseña incorrecta</p>}
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:6 }}>
+          <button onClick={onCancel} style={{ fontSize:13, background:"var(--bg-secondary)", border:"0.5px solid var(--border)", color:"var(--text-primary)", borderRadius:8, padding:"6px 14px", cursor:"pointer" }}>Cancelar</button>
+          <button disabled={!value || busy} onClick={onSubmit}
+            style={{ background: value?"var(--accent)":"var(--bg-hover)", color:"#fff", border:"none", borderRadius:8, padding:"6px 16px", cursor: value?"pointer":"not-allowed", fontWeight:500, fontSize:13 }}>
+            {busy ? "Verificando..." : "Desbloquear"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailModal({ item, onClose, onEdit, canEdit }) {
   const fields = [["Características",item.caracteristicas],["U.M.",item.um],["Marca",item.marca],["Proveedor",item.proveedor],["Notas",item.notas]];
   return (
     <div onClick={onClose} style={overlayStyle}>
@@ -143,7 +159,7 @@ function DetailModal({ item, onClose, onEdit }) {
           </div>
           <div style={{ marginTop:14, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <span style={{ fontSize:22, fontWeight:600, color:"var(--accent-light)" }}>S/ {Number(item.precio).toFixed(2)} <span style={{ fontSize:13, fontWeight:400, color:"var(--text-muted)" }}>/ {item.um}</span></span>
-            <button onClick={onEdit} style={{ fontSize:13, background:"var(--bg-secondary)", border:"0.5px solid var(--border)", color:"var(--text-primary)", borderRadius:8, padding:"5px 12px", cursor:"pointer" }}>Editar</button>
+            {canEdit && <button onClick={onEdit} style={{ fontSize:13, background:"var(--bg-secondary)", border:"0.5px solid var(--border)", color:"var(--text-primary)", borderRadius:8, padding:"5px 12px", cursor:"pointer" }}>Editar</button>}
           </div>
       </div>
     </div>
@@ -160,11 +176,14 @@ export default function App() {
   const [loadingData, setLoadingData] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-
-  useEffect(() => { fetchItems(); }, []);
+  const [unlocked, setUnlocked] = useState(() => localStorage.getItem("pw_unlocked") === "1");
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwInput, setPwInput] = useState("");
+  const [pwError, setPwError] = useState(false);
+  const [pwBusy, setPwBusy] = useState(false);
+  const passwordRef = useRef(null);
 
   const fetchItems = async () => {
-    setLoadingData(true);
     try {
       const data = await getItems();
       setItems(data || []);
@@ -172,6 +191,38 @@ export default function App() {
       setError("Error al cargar los artículos.");
     }
     setLoadingData(false);
+  };
+
+  useEffect(() => {
+    getItems().then(data => {
+      setItems(data || []);
+      setLoadingData(false);
+    }).catch(() => {
+      setError("Error al cargar los artículos.");
+      setLoadingData(false);
+    });
+  }, []);
+
+  const unlock = async () => {
+    setPwBusy(true);
+    setPwError(false);
+    try {
+      await verifyPassword(pwInput);
+      passwordRef.current = pwInput;
+      setUnlocked(true);
+      localStorage.setItem("pw_unlocked", "1");
+      setPwOpen(false);
+      setPwInput("");
+    } catch {
+      setPwError(true);
+    }
+    setPwBusy(false);
+  };
+
+  const lock = () => {
+    passwordRef.current = null;
+    setUnlocked(false);
+    localStorage.removeItem("pw_unlocked");
   };
 
   const filtered = items.filter(i => {
@@ -185,11 +236,11 @@ export default function App() {
     setSaving(true);
     try {
       if (editing) {
-        await updateItem({ ...form, id: editing.id });
+        await updateItem({ ...form, id: editing.id }, passwordRef.current);
         await fetchItems();
         setDetail({ ...form, id: editing.id });
       } else {
-        await createItem(form);
+        await createItem(form, passwordRef.current);
         await fetchItems();
       }
     } catch {
@@ -209,7 +260,17 @@ export default function App() {
           <p style={{ margin:0, fontSize:20, fontWeight:500, color:"var(--color-text-primary)" }}>Catálogo de materiales</p>
           <p style={{ margin:0, fontSize:13, color:"var(--color-text-secondary)" }}>{items.length} artículo{items.length!==1?"s":""} registrado{items.length!==1?"s":""}</p>
         </div>
-        <button onClick={()=>{ setEditing(null); setFormOpen(true); }} style={{ background:"#5a32b0", color:"#fff", border:"none", borderRadius:8, padding:"7px 16px", cursor:"pointer", fontWeight:500, fontSize:14 }}>+ Nuevo artículo</button>
+        <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+          {unlocked ? (
+            <>
+              <span style={{ fontSize:12, fontWeight:500, padding:"4px 10px", borderRadius:20, background:"var(--accent-subtle)", color:"var(--accent)" }}>Modo edición</span>
+              <button onClick={lock} style={{ background:"var(--bg-secondary)", color:"var(--text-primary)", border:"0.5px solid var(--border)", borderRadius:8, padding:"7px 14px", cursor:"pointer", fontWeight:500, fontSize:13 }}>Bloquear</button>
+              <button onClick={()=>{ setEditing(null); setFormOpen(true); }} style={{ background:"#5a32b0", color:"#fff", border:"none", borderRadius:8, padding:"7px 16px", cursor:"pointer", fontWeight:500, fontSize:14 }}>+ Nuevo artículo</button>
+            </>
+          ) : (
+            <button onClick={()=>setPwOpen(true)} style={{ background:"var(--bg-secondary)", color:"var(--text-primary)", border:"0.5px solid var(--border)", borderRadius:8, padding:"7px 14px", cursor:"pointer", fontWeight:500, fontSize:13 }}>Desbloquear edición</button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -243,7 +304,9 @@ export default function App() {
                 <Badge cat={item.categoria}/>
                 <p style={{ margin:"4px 0 4px", fontWeight:600, fontSize:14, color:"var(--accent)" }}>S/ {Number(item.precio).toFixed(2)}<span style={{ fontWeight:400, fontSize:11, color:"var(--color-text-secondary)" }}> /{item.um}</span></p>
                 <div onClick={e=>e.stopPropagation()}>
-                  <button onClick={()=>{ setEditing(item); setFormOpen(true); }} style={{ fontSize:11, padding:"2px 8px", borderRadius:5, background:"var(--bg-secondary)", border:"0.5px solid var(--border)", color:"var(--text-muted)", cursor:"pointer", fontWeight:500 }}>Editar</button>
+                  {unlocked && (
+                    <button onClick={()=>{ setEditing(item); setFormOpen(true); }} style={{ fontSize:11, padding:"2px 8px", borderRadius:5, background:"var(--bg-secondary)", border:"0.5px solid var(--border)", color:"var(--text-muted)", cursor:"pointer", fontWeight:500 }}>Editar</button>
+                  )}
                 </div>
               </div>
             </div>
@@ -258,11 +321,17 @@ export default function App() {
       )}
 
       {detail && !formOpen && (
-        <DetailModal item={detail} onClose={()=>setDetail(null)} onEdit={()=>{ setEditing(detail); setFormOpen(true); }}/>
+        <DetailModal item={detail} onClose={()=>setDetail(null)} onEdit={()=>{ setEditing(detail); setFormOpen(true); }} canEdit={unlocked}/>
       )}
 
       {formOpen && (
         <FormModal initial={editing} onSave={save} onClose={()=>{ setFormOpen(false); setEditing(null); }} loading={saving}/>
+      )}
+
+      {pwOpen && (
+        <PasswordModal error={pwError} busy={pwBusy} value={pwInput} onChange={setPwInput}
+          onCancel={()=>{ setPwOpen(false); setPwInput(""); setPwError(false); }}
+          onSubmit={unlock}/>
       )}
     </div>  
   );

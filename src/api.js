@@ -4,19 +4,25 @@ async function request(method, body) {
   const opts = { method };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(API_URL, opts);
-  if (!res.ok) throw new Error("Error en la solicitud");
-  return res.json();
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data || data.error) {
+    throw new Error(data && data.error ? data.error : "Error en la solicitud");
+  }
+  return data;
 }
 
 export async function getItems() {
   return request("GET");
 }
 
-export async function createItem(item) {
-  return request("POST", { _action: "create", ...item });
+export async function verifyPassword(password) {
+  return request("POST", { _action: "verify", _password: password });
 }
 
-export async function updateItem(item) {
-  return request("POST", { _action: "update", ...item });
+export async function createItem(item, password) {
+  return request("POST", { _action: "create", _password: password, ...item });
 }
 
+export async function updateItem(item, password) {
+  return request("POST", { _action: "update", _password: password, ...item });
+}

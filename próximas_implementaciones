@@ -1,0 +1,14 @@
+cómo puedo compartir esta app sin que hay opción de modificar mi bd en google sheets?
+
+Actualmente cualquiera con la URL del Apps Script puede leer y escribir en tu hoja. Para separar permisos, hay varias opciones:
+
+Opción A: App de solo lectura pública
+Eliminar del frontend los botones de editar/crear y los endpoints _action: create/update del Apps Script. Todos ven el catálogo, nadie puede modificar. Tú editas directo en la hoja.
+
+Opción B: Password para escribir
+Agregar un campo de contraseña en el frontend antes de mostrar los botones de editar. El Apps Script verifica la contraseña antes de ejecutar writes.
+Usuario ve catálogo → quiere editar → pone password → habilita botones
+
+Opción C: Proxy con Vercel Functions
+Crear una función serverless en Vercel que valide una clave secreta (solo tú la conoces) y reenvíe al Apps Script. El frontend llama a /api/... y la URL del script nunca se expone al cliente.
+Frontend → Vercel Function (valida secreto) → Apps Script
