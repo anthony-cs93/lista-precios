@@ -3,7 +3,7 @@
 // 2. Copia TODO este archivo a tu proyecto en script.google.com.
 // 3. Republica el web app (Implementar > Nueva implementación > Web app, acceso "Cualquier persona").
 
-const WRITE_PASSWORD = "mi_clave_secreta";
+const WRITE_PASSWORD = "lista010826";
 
 const COL_MAP = {
   "#": "id", "PRODUCTO": "nombre", "MEDIDA SEC.": "caracteristicas",
